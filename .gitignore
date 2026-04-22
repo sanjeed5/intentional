@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (in case you ever add tooling)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Local backup / generated files
+*.zip
+intentional-backup-*.json
+
+# Env / secrets
+.env
+.env.*

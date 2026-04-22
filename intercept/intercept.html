@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pause - Intentional</title>
+    <link rel="stylesheet" href="intercept.css" />
+  </head>
+  <body>
+    <main class="card" aria-live="polite">
+      <header class="header">
+        <div class="brand">
+          <span class="brand-dot" aria-hidden="true"></span>
+          Intentional
+        </div>
+        <button id="settings-btn" class="link" type="button">Settings</button>
+      </header>
+
+      <section id="pause-stage" class="stage">
+        <div class="breath-wrap" aria-hidden="true">
+          <div id="breath-aura" class="breath-aura"></div>
+          <div id="breath-circle" class="breath-circle"></div>
+          <svg class="ring-svg" viewBox="0 0 120 120">
+            <circle class="ring-track" cx="60" cy="60" r="54" />
+            <circle
+              id="ring-progress"
+              class="ring-progress"
+              cx="60"
+              cy="60"
+              r="54"
+            />
+          </svg>
+          <div class="ring-label">
+            <div id="countdown" class="countdown">10</div>
+            <div id="breath-label" class="countdown-sub">breathe in</div>
+          </div>
+        </div>
+        <h1 class="title">Take a breath.</h1>
+        <p class="subtitle">
+          You're about to open <span id="host-name" class="host"></span>.
+        </p>
+      </section>
+
+      <section id="prompt-stage" class="stage hidden">
+        <h1 class="title">Why do you want to open this?</h1>
+        <p class="subtitle">
+          A short, honest answer is enough.
+          <span id="prompt-host" class="host"></span>
+        </p>
+
+        <section
+          id="recent-intents"
+          class="recent-intents hidden"
+          aria-label="Recent reasons for this site"
+        >
+          <div class="recent-label">Recent reasons here</div>
+          <ul id="recent-intents-list" class="recent-list"></ul>
+        </section>
+
+        <div class="intent-wrap">
+          <textarea
+            id="intent"
+            rows="3"
+            maxlength="500"
+            placeholder="e.g. Reply to a message from a friend"
+          ></textarea>
+          <div class="intent-meta">
+            <span id="intent-error" class="error hidden">
+              Please write a short reason first.
+            </span>
+            <span id="intent-counter" class="counter">0 / 500</span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="cancel-btn" class="btn btn-secondary" type="button">
+            Cancel
+          </button>
+          <button id="continue-btn" class="btn btn-primary" type="button">
+            Continue
+          </button>
+        </div>
+        <div class="shortcuts">
+          <span><kbd>⌘</kbd><kbd>Enter</kbd> continue</span>
+          <span class="sep">·</span>
+          <span><kbd>Esc</kbd> cancel</span>
+        </div>
+      </section>
+
+      <footer class="footer">Everything stays on your computer.</footer>
+    </main>
+
+    <script src="intercept.js"></script>
+  </body>
+</html>

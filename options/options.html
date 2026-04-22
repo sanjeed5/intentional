@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Intentional - Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="page-header">
+        <div>
+          <h1>
+            <span class="brand-dot" aria-hidden="true"></span>
+            Intentional
+          </h1>
+          <p class="lede">A small pause before distracting sites.</p>
+        </div>
+      </header>
+
+      <section class="card">
+        <h2>Settings</h2>
+
+        <label class="field">
+          <span class="label">Pause length (seconds)</span>
+          <input
+            id="pause-seconds"
+            type="number"
+            min="0"
+            max="600"
+            step="1"
+            inputmode="numeric"
+          />
+          <span class="hint">
+            How long the calm breath runs before the prompt.
+          </span>
+        </label>
+
+        <label class="field">
+          <span class="label">Grace window (minutes)</span>
+          <input
+            id="allow-grace"
+            type="number"
+            min="0"
+            max="240"
+            step="1"
+            inputmode="numeric"
+          />
+          <span class="hint">
+            After you click Continue, the same site stays unblocked in that tab
+            for this many minutes.
+          </span>
+        </label>
+
+        <label class="field">
+          <span class="label">Blocked sites</span>
+          <textarea
+            id="blocked-sites"
+            rows="6"
+            placeholder="x.com&#10;twitter.com&#10;youtube.com"
+          ></textarea>
+          <span class="hint">
+            One hostname per line. Subdomains are matched automatically
+            (e.g. <code>twitter.com</code> also catches
+            <code>mobile.twitter.com</code>).
+          </span>
+        </label>
+
+        <div class="row">
+          <button id="save-btn" class="btn btn-primary" type="button">Save</button>
+          <button id="reset-btn" class="btn btn-secondary" type="button">
+            Reset to defaults
+          </button>
+          <span id="status" class="status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Local stats</h2>
+          <button id="clear-stats-btn" class="link" type="button">
+            Clear stats &amp; history
+          </button>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-num" id="stat-intercepted">0</div>
+            <div class="stat-label">Pauses shown</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-continued">0</div>
+            <div class="stat-label">Continued</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-cancelled">0</div>
+            <div class="stat-label">Cancelled</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-cancel-rate">0%</div>
+            <div class="stat-label">Cancel rate</div>
+          </div>
+        </div>
+
+        <div class="subhead">
+          <span>Last 14 days</span>
+          <span class="muted" id="chart-summary"></span>
+        </div>
+        <div id="chart" class="chart" role="img" aria-label="Daily pauses, last 14 days"></div>
+
+        <div class="subhead">
+          <span>Top sites</span>
+        </div>
+        <ul id="top-sites" class="top-sites">
+          <li class="empty">No data yet.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Recent intents</h2>
+          <span class="muted" id="history-count">0 entries</span>
+        </div>
+        <div class="history">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Site</th>
+                <th>Intent</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="history-body">
+              <tr class="empty">
+                <td colspan="4">No history yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Backup</h2>
+        </div>
+        <p class="muted" style="margin-top: 0;">
+          Export a JSON file with your settings, stats, and history. Import
+          replaces everything with the file's contents.
+        </p>
+        <div class="row">
+          <button id="export-btn" class="btn btn-secondary" type="button">
+            Export
+          </button>
+          <button id="import-btn" class="btn btn-secondary" type="button">
+            Import…
+          </button>
+          <input
+            id="import-file"
+            type="file"
+            accept="application/json,.json"
+            hidden
+          />
+        </div>
+      </section>
+
+      <footer class="page-footer">
+        Everything stays on your computer. No accounts, no servers, no tracking.
+      </footer>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>
