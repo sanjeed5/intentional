@@ -3,14 +3,11 @@
 
 importScripts("lib/behavior.js");
 
-const {
-  normalizeHost,
-  hostMatches,
-  findBlockingPattern,
-  allowanceKey,
-  resolvePattern,
-  tabStillOnBlockedHost: tabOnBlockedHost,
-} = globalThis.IntentionalBehavior;
+const behavior = globalThis.IntentionalBehavior;
+const behaviorFindBlockingPattern = behavior.findBlockingPattern;
+const behaviorAllowanceKey = behavior.allowanceKey;
+const behaviorResolvePattern = behavior.resolvePattern;
+const behaviorTabStillOnBlockedHost = behavior.tabStillOnBlockedHost;
 
 const PENDING_ALLOWANCES = new Set();
 const CHECKIN_RETRY_MS = 60 * 1000;
@@ -67,10 +64,10 @@ async function getSettings() {
 }
 
 async function isAllowed(tabId, host, patterns) {
-  const match = findBlockingPattern(host, patterns);
+  const match = behaviorFindBlockingPattern(host, patterns);
   if (!match) return false;
 
-  const key = allowanceKey(tabId, match);
+  const key = behaviorAllowanceKey(tabId, match);
   const { [ALLOW_KEY]: sessions = {} } = await chrome.storage.session.get(
     ALLOW_KEY,
   );
@@ -93,7 +90,7 @@ async function isAllowed(tabId, host, patterns) {
 }
 
 async function allowTabPattern(tabId, pattern, minutes) {
-  const key = allowanceKey(tabId, pattern);
+  const key = behaviorAllowanceKey(tabId, pattern);
   if (minutes === 0) {
     // One-shot in memory only — not persisted; re-intercept on next navigation.
     PENDING_ALLOWANCES.add(key);
@@ -179,7 +176,11 @@ async function startTabSession(tabId, { pattern, host, intent }) {
 }
 
 function tabStillOnBlockedHost(tab, session, settings) {
-  return tabOnBlockedHost(tab.url, session.pattern, settings.blockedSites);
+  return behaviorTabStillOnBlockedHost(
+    tab.url,
+    session.pattern,
+    settings.blockedSites,
+  );
 }
 
 async function injectCheckInOverlay(tabId, session) {
@@ -293,7 +294,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
   const settings = await getSettings();
-  const match = findBlockingPattern(url.hostname, settings.blockedSites);
+  const match = behaviorFindBlockingPattern(url.hostname, settings.blockedSites);
   if (!match) return;
 
   // Don't intercept ourselves
@@ -371,7 +372,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       const { target, host, pattern, intent } = msg;
       const settings = await getSettings();
-      const matchedPattern = resolvePattern(
+      const matchedPattern = behaviorResolvePattern(
         target,
         pattern,
         settings.blockedSites,
