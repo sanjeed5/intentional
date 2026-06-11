@@ -1,0 +1,7 @@
+{
+  "name": "intentional",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/behavior.test.js"
+  }
+}

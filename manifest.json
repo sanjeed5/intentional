@@ -6,7 +6,9 @@
   "permissions": [
     "storage",
     "tabs",
-    "webNavigation"
+    "webNavigation",
+    "alarms",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -19,7 +21,7 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "Intentional - settings",
+    "default_title": "Intentional - insights",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",

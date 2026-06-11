@@ -28,8 +28,13 @@ const els = {
   intentCounter: document.getElementById("intent-counter"),
   continueBtn: document.getElementById("continue-btn"),
   cancelBtn: document.getElementById("cancel-btn"),
+  insightsBtn: document.getElementById("insights-btn"),
   settingsBtn: document.getElementById("settings-btn"),
+  pauseCancelBtn: document.getElementById("pause-cancel-btn"),
 };
+
+let activePause = null;
+let settled = false;
 
 const prefersReducedMotion = window.matchMedia(
   "(prefers-reduced-motion: reduce)",
@@ -117,6 +122,17 @@ function startBreathing(plan) {
   };
 }
 
+function stopPause() {
+  if (activePause) {
+    activePause.stop();
+    activePause = null;
+  }
+}
+
+function isPauseStageActive() {
+  return els.promptStage.classList.contains("hidden");
+}
+
 async function startCountdown() {
   const settings = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
   const total = Math.max(0, Math.floor(settings?.pauseSeconds ?? 10));
@@ -144,12 +160,19 @@ async function startCountdown() {
   });
 
   let remaining = total;
-  const interval = setInterval(() => {
+  let interval;
+  const stop = () => {
+    clearInterval(interval);
+    breath.stop();
+  };
+  activePause = { stop };
+
+  interval = setInterval(() => {
     remaining -= 1;
     els.countdown.textContent = String(Math.max(0, remaining));
     if (remaining <= 0) {
-      clearInterval(interval);
-      breath.stop();
+      stop();
+      activePause = null;
       showPrompt();
     }
   }, 1000);
@@ -275,6 +298,11 @@ async function onContinue() {
 }
 
 async function onCancel() {
+  if (settled) return;
+  settled = true;
+  stopPause();
+  if (els.pauseCancelBtn) els.pauseCancelBtn.disabled = true;
+
   const intent = getIntent();
   els.continueBtn.disabled = true;
   els.cancelBtn.disabled = true;
@@ -299,6 +327,10 @@ async function onCancel() {
 
 els.continueBtn.addEventListener("click", onContinue);
 els.cancelBtn.addEventListener("click", onCancel);
+els.pauseCancelBtn.addEventListener("click", onCancel);
+els.insightsBtn.addEventListener("click", () => {
+  chrome.runtime.sendMessage({ type: "OPEN_INSIGHTS" });
+});
 els.settingsBtn.addEventListener("click", () => {
   chrome.runtime.sendMessage({ type: "OPEN_OPTIONS" });
 });
@@ -314,11 +346,20 @@ els.intent.addEventListener("keydown", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    // Only let Escape cancel once the prompt is visible.
-    if (!els.promptStage.classList.contains("hidden")) {
-      e.preventDefault();
-      onCancel();
-    }
+    e.preventDefault();
+    onCancel();
+    return;
+  }
+  if (
+    e.key === "Enter" &&
+    !e.metaKey &&
+    !e.ctrlKey &&
+    !e.shiftKey &&
+    !e.altKey &&
+    isPauseStageActive()
+  ) {
+    e.preventDefault();
+    onCancel();
   }
 });
 

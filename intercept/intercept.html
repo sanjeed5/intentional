@@ -13,7 +13,10 @@
           <span class="brand-dot" aria-hidden="true"></span>
           Intentional
         </div>
-        <button id="settings-btn" class="link" type="button">Settings</button>
+        <nav class="header-nav" aria-label="Extension pages">
+          <button id="insights-btn" class="link" type="button">Insights</button>
+          <button id="settings-btn" class="link" type="button">Settings</button>
+        </nav>
       </header>
 
       <section id="pause-stage" class="stage">
@@ -39,6 +42,14 @@
         <p class="subtitle">
           You're about to open <span id="host-name" class="host"></span>.
         </p>
+        <div class="pause-actions">
+          <button id="pause-cancel-btn" class="link" type="button">
+            Close tab
+          </button>
+        </div>
+        <div class="shortcuts">
+          <span><kbd>Esc</kbd> or <kbd>Enter</kbd> to close</span>
+        </div>
       </section>
 
       <section id="prompt-stage" class="stage hidden">

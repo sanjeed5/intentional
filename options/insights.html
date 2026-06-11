@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Intentional - Insights</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="page-header">
+        <div>
+          <h1>
+            <span class="brand-dot" aria-hidden="true"></span>
+            Intentional
+          </h1>
+          <p class="lede">Patterns in how you open distracting sites.</p>
+          <nav class="page-nav" aria-label="Extension pages">
+            <a href="options.html" class="page-nav-link">Settings</a>
+            <a href="insights.html" class="page-nav-link" aria-current="page"
+              >Insights</a
+            >
+          </nav>
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Overview</h2>
+          <button id="clear-stats-btn" class="link" type="button">
+            Clear stats &amp; history
+          </button>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-num" id="stat-intercepted">0</div>
+            <div class="stat-label">Pauses shown</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-continued">0</div>
+            <div class="stat-label">Continued</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-cancelled">0</div>
+            <div class="stat-label">Cancelled</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-cancel-rate">0%</div>
+            <div class="stat-label">Cancel rate</div>
+          </div>
+        </div>
+
+        <div class="subhead">
+          <span>Last 14 days</span>
+          <span class="muted" id="chart-summary"></span>
+        </div>
+        <div id="chart" class="chart" role="img" aria-label="Daily pauses, last 14 days"></div>
+
+        <div class="subhead">
+          <span>Top sites</span>
+        </div>
+        <ul id="top-sites" class="top-sites">
+          <li class="empty">No data yet.</li>
+        </ul>
+
+        <div class="subhead">
+          <span>Patterns</span>
+        </div>
+        <ul id="insights" class="insights">
+          <li class="empty">No patterns yet.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Analyze with AI</h2>
+        </div>
+        <p class="muted" style="margin-top: 0;">
+          Export saves <code>intentional-export.json</code> to your Downloads
+          folder. Attach it in ChatGPT, Claude, or any AI chat, then paste the
+          prompt below.
+        </p>
+        <textarea
+          id="analysis-prompt"
+          class="analysis-prompt"
+          rows="8"
+          readonly
+          spellcheck="false"
+        ></textarea>
+        <div class="row">
+          <button id="export-analysis-btn" class="btn btn-secondary" type="button">
+            Export
+          </button>
+          <button id="copy-prompt-btn" class="btn btn-secondary" type="button">
+            Copy prompt
+          </button>
+          <span id="copy-prompt-status" class="status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Recent intents</h2>
+          <span class="muted" id="history-count">0 entries</span>
+        </div>
+        <p class="muted history-note" id="history-note"></p>
+        <div class="history history-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Site</th>
+                <th>Intent</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="history-body">
+              <tr class="empty">
+                <td colspan="4">No history yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Backup</h2>
+        </div>
+        <p class="muted" style="margin-top: 0;">
+          Export a JSON file with your settings, stats, and history. Import
+          replaces everything with the file's contents.
+        </p>
+        <div class="row">
+          <button id="export-btn" class="btn btn-secondary" type="button">
+            Export
+          </button>
+          <button id="import-btn" class="btn btn-secondary" type="button">
+            Import…
+          </button>
+          <input
+            id="import-file"
+            type="file"
+            accept="application/json,.json"
+            hidden
+          />
+          <span id="status" class="status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <footer class="page-footer">
+        Everything stays on your computer. No accounts, no servers, no tracking.
+      </footer>
+    </main>
+
+    <script src="shared.js"></script>
+    <script src="insights.js"></script>
+  </body>
+</html>
