@@ -13,6 +13,7 @@ const {
 } = globalThis.IntentionalBehavior;
 
 const PENDING_ALLOWANCES = new Set();
+const CHECKIN_RETRY_MS = 60 * 1000;
 
 const DEFAULTS = {
   blockedSites: ["x.com", "twitter.com"],
@@ -84,14 +85,21 @@ async function isAllowed(tabId, host, patterns) {
     PENDING_ALLOWANCES.delete(key);
     return true;
   }
-  if (PENDING_ALLOWANCES.has(key)) return true;
+  if (PENDING_ALLOWANCES.has(key)) {
+    PENDING_ALLOWANCES.delete(key);
+    return true;
+  }
   return false;
 }
 
 async function allowTabPattern(tabId, pattern, minutes) {
-  if (minutes === 0) return;
-
   const key = allowanceKey(tabId, pattern);
+  if (minutes === 0) {
+    // One-shot in memory only — not persisted; re-intercept on next navigation.
+    PENDING_ALLOWANCES.add(key);
+    return;
+  }
+
   PENDING_ALLOWANCES.add(key);
 
   const { [ALLOW_KEY]: sessions = {} } = await chrome.storage.session.get(
@@ -228,8 +236,12 @@ async function handleCheckInAlarm(tabId) {
   try {
     await injectCheckInOverlay(tabId, session);
   } catch {
-    // Tab may have become unavailable; leave session for a future alarm retry
-    // or cleanup on tab events.
+    // Alarm is one-shot; reschedule a short retry after transient injection failure.
+    const retryAt = Date.now() + CHECKIN_RETRY_MS;
+    session.nextCheckInAt = retryAt;
+    sessions[tabId] = session;
+    await setTabSessions(sessions);
+    await scheduleCheckIn(tabId, retryAt);
   }
 }
 

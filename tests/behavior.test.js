@@ -64,16 +64,28 @@ describe("entry gate — autopilot opening", () => {
     assert.equal(result.intercept, true);
   });
 
-  it("re-intercepts when grace is zero (every navigation)", () => {
+  it("allows one navigation when grace is zero, then re-intercepts", () => {
     const allowances = createAllowanceStore();
     allowances.grant(TAB, "x.com", 0);
-    const result = shouldInterceptNavigation({
+    assert.equal(allowances._entries.size, 0);
+    assert.equal(allowances._pending.size, 1);
+
+    const first = shouldInterceptNavigation({
       tabId: TAB,
       host: "x.com",
       blockedSites: BLOCKED,
       allowances,
     });
-    assert.equal(result.intercept, true);
+    assert.equal(first, false);
+    assert.equal(allowances._pending.size, 0);
+
+    const second = shouldInterceptNavigation({
+      tabId: TAB,
+      host: "x.com",
+      blockedSites: BLOCKED,
+      allowances,
+    });
+    assert.equal(second.intercept, true);
   });
 
   it("clears pending after storage is visible so timed grace can expire", () => {
@@ -221,10 +233,13 @@ describe("allowance expiry semantics", () => {
     assert.equal(allowanceExpiry(-1), Number.MAX_SAFE_INTEGER);
   });
 
-  it("zero minutes means no allowance is stored", () => {
+  it("zero minutes stores a one-shot pending allowance only", () => {
     const allowances = createAllowanceStore();
     allowances.grant(TAB, "x.com", 0);
     assert.equal(allowances._entries.size, 0);
+    assert.equal(allowances._pending.size, 1);
+    assert.equal(allowances.isAllowed(TAB, "x.com", BLOCKED), true);
     assert.equal(allowances._pending.size, 0);
+    assert.equal(allowances.isAllowed(TAB, "x.com", BLOCKED), false);
   });
 });
