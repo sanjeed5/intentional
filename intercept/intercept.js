@@ -2,6 +2,8 @@
 // Reads the target URL from the query string, runs a guided breathing pause,
 // then asks the user for an intent before continuing or cancelling.
 
+const { normalizeHost } = globalThis.IntentionalBehavior;
+
 const params = new URLSearchParams(window.location.search);
 const target = params.get("target") || "";
 const host = params.get("host") || "";
@@ -28,8 +30,13 @@ const els = {
   intentCounter: document.getElementById("intent-counter"),
   continueBtn: document.getElementById("continue-btn"),
   cancelBtn: document.getElementById("cancel-btn"),
+  insightsBtn: document.getElementById("insights-btn"),
   settingsBtn: document.getElementById("settings-btn"),
+  pauseCancelBtn: document.getElementById("pause-cancel-btn"),
 };
+
+let activePause = null;
+let settled = false;
 
 const prefersReducedMotion = window.matchMedia(
   "(prefers-reduced-motion: reduce)",
@@ -117,6 +124,17 @@ function startBreathing(plan) {
   };
 }
 
+function stopPause() {
+  if (activePause) {
+    activePause.stop();
+    activePause = null;
+  }
+}
+
+function isPauseStageActive() {
+  return els.promptStage.classList.contains("hidden");
+}
+
 async function startCountdown() {
   const settings = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
   const total = Math.max(0, Math.floor(settings?.pauseSeconds ?? 10));
@@ -144,12 +162,19 @@ async function startCountdown() {
   });
 
   let remaining = total;
-  const interval = setInterval(() => {
+  let interval;
+  const stop = () => {
+    clearInterval(interval);
+    breath.stop();
+  };
+  activePause = { stop };
+
+  interval = setInterval(() => {
     remaining -= 1;
     els.countdown.textContent = String(Math.max(0, remaining));
     if (remaining <= 0) {
-      clearInterval(interval);
-      breath.stop();
+      stop();
+      activePause = null;
       showPrompt();
     }
   }, 1000);
@@ -174,10 +199,6 @@ function showPrompt() {
   }, 280);
 }
 
-function normalizeHost(h) {
-  return (h || "").toLowerCase().replace(/^www\./, "");
-}
-
 function relativeTime(ts) {
   const diff = Date.now() - ts;
   const mins = Math.round(diff / 60000);
@@ -190,17 +211,27 @@ function relativeTime(ts) {
   return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+function entryMatchesSite(entry) {
+  const sitePattern = pattern ? normalizeHost(pattern) : "";
+  const siteHost = host ? normalizeHost(host) : "";
+  if (!sitePattern && !siteHost) return false;
+  if (sitePattern && entry.pattern) {
+    if (normalizeHost(entry.pattern) === sitePattern) return true;
+  }
+  if (siteHost) {
+    if (normalizeHost(entry.host) === siteHost) return true;
+  }
+  return false;
+}
+
 async function loadRecentIntents() {
   try {
     const { history = [] } = await chrome.storage.local.get("history");
-    const needle = normalizeHost(host);
-    if (!needle) return;
+    if (!pattern && !host) return;
     const matches = history
       .filter(
         (h) =>
-          normalizeHost(h.host) === needle &&
-          h.intent &&
-          h.intent.trim().length > 0,
+          entryMatchesSite(h) && h.intent && h.intent.trim().length > 0,
       )
       .slice(0, RECENT_INTENT_COUNT);
 
@@ -275,6 +306,11 @@ async function onContinue() {
 }
 
 async function onCancel() {
+  if (settled) return;
+  settled = true;
+  stopPause();
+  if (els.pauseCancelBtn) els.pauseCancelBtn.disabled = true;
+
   const intent = getIntent();
   els.continueBtn.disabled = true;
   els.cancelBtn.disabled = true;
@@ -299,8 +335,12 @@ async function onCancel() {
 
 els.continueBtn.addEventListener("click", onContinue);
 els.cancelBtn.addEventListener("click", onCancel);
+els.pauseCancelBtn.addEventListener("click", onCancel);
+els.insightsBtn.addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("options/insights.html") });
+});
 els.settingsBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "OPEN_OPTIONS" });
+  chrome.runtime.openOptionsPage();
 });
 
 els.intent.addEventListener("input", updateCounter);
@@ -314,11 +354,20 @@ els.intent.addEventListener("keydown", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    // Only let Escape cancel once the prompt is visible.
-    if (!els.promptStage.classList.contains("hidden")) {
-      e.preventDefault();
-      onCancel();
-    }
+    e.preventDefault();
+    onCancel();
+    return;
+  }
+  if (
+    e.key === "Enter" &&
+    !e.metaKey &&
+    !e.ctrlKey &&
+    !e.shiftKey &&
+    !e.altKey &&
+    isPauseStageActive()
+  ) {
+    e.preventDefault();
+    onCancel();
   }
 });
 

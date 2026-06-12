@@ -15,6 +15,7 @@ yarn-error.log
 # Local backup / generated files
 *.zip
 intentional-backup-*.json
+data/intentional-export.json
 
 # Env / secrets
 .env

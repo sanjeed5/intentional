@@ -1,12 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Intentional",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Pause before opening distracting sites. Type why you want to visit, then choose to continue or close the tab. Everything stays on your computer.",
   "permissions": [
     "storage",
     "tabs",
-    "webNavigation"
+    "webNavigation",
+    "alarms",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -19,7 +21,7 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "Intentional - settings",
+    "default_title": "Intentional - insights",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",

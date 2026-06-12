@@ -15,6 +15,12 @@
             Intentional
           </h1>
           <p class="lede">A small pause before distracting sites.</p>
+          <nav class="page-nav" aria-label="Extension pages">
+            <a href="options.html" class="page-nav-link" aria-current="page"
+              >Settings</a
+            >
+            <a href="insights.html" class="page-nav-link">Insights</a>
+          </nav>
         </div>
       </header>
 
@@ -37,18 +43,44 @@
         </label>
 
         <label class="field">
-          <span class="label">Grace window (minutes)</span>
+          <span class="label">After you continue</span>
+          <select id="allow-grace-mode">
+            <option value="continue">Ask again after you continue</option>
+            <option value="tab">Stay unblocked until I close the tab</option>
+            <option value="minutes">Ask again after a fixed window</option>
+          </select>
+          <div id="allow-grace-row" class="field-row hidden">
+            <input
+              id="allow-grace"
+              type="number"
+              min="1"
+              max="240"
+              step="1"
+              inputmode="numeric"
+            />
+            <span class="field-unit">minutes</span>
+          </div>
+          <span class="hint">
+            Controls how long the same blocked site stays open in that tab
+            before the pause appears again. Subdomains count as the same site.
+            Whole minutes only.
+          </span>
+        </label>
+
+        <label class="field">
+          <span class="label">Check-in interval (minutes)</span>
           <input
-            id="allow-grace"
+            id="check-in-minutes"
             type="number"
-            min="0"
+            min="1"
             max="240"
             step="1"
             inputmode="numeric"
           />
           <span class="hint">
-            After you click Continue, the same site stays unblocked in that tab
-            for this many minutes.
+            After you continue past the entry gate, how long before a gentle
+            in-page check-in appears — and the same interval between each
+            check-in if you stay. Default 10. Whole minutes only.
           </span>
         </label>
 
@@ -75,99 +107,13 @@
         </div>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>Local stats</h2>
-          <button id="clear-stats-btn" class="link" type="button">
-            Clear stats &amp; history
-          </button>
-        </div>
-        <div class="stats">
-          <div class="stat">
-            <div class="stat-num" id="stat-intercepted">0</div>
-            <div class="stat-label">Pauses shown</div>
-          </div>
-          <div class="stat">
-            <div class="stat-num" id="stat-continued">0</div>
-            <div class="stat-label">Continued</div>
-          </div>
-          <div class="stat">
-            <div class="stat-num" id="stat-cancelled">0</div>
-            <div class="stat-label">Cancelled</div>
-          </div>
-          <div class="stat">
-            <div class="stat-num" id="stat-cancel-rate">0%</div>
-            <div class="stat-label">Cancel rate</div>
-          </div>
-        </div>
-
-        <div class="subhead">
-          <span>Last 14 days</span>
-          <span class="muted" id="chart-summary"></span>
-        </div>
-        <div id="chart" class="chart" role="img" aria-label="Daily pauses, last 14 days"></div>
-
-        <div class="subhead">
-          <span>Top sites</span>
-        </div>
-        <ul id="top-sites" class="top-sites">
-          <li class="empty">No data yet.</li>
-        </ul>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>Recent intents</h2>
-          <span class="muted" id="history-count">0 entries</span>
-        </div>
-        <div class="history">
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Site</th>
-                <th>Intent</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="history-body">
-              <tr class="empty">
-                <td colspan="4">No history yet.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>Backup</h2>
-        </div>
-        <p class="muted" style="margin-top: 0;">
-          Export a JSON file with your settings, stats, and history. Import
-          replaces everything with the file's contents.
-        </p>
-        <div class="row">
-          <button id="export-btn" class="btn btn-secondary" type="button">
-            Export
-          </button>
-          <button id="import-btn" class="btn btn-secondary" type="button">
-            Import…
-          </button>
-          <input
-            id="import-file"
-            type="file"
-            accept="application/json,.json"
-            hidden
-          />
-        </div>
-      </section>
-
       <footer class="page-footer">
         Everything stays on your computer. No accounts, no servers, no tracking.
       </footer>
     </main>
 
-    <script src="options.js"></script>
+    <script src="../lib/defaults.js"></script>
+    <script src="shared.js"></script>
+    <script src="settings.js"></script>
   </body>
 </html>
