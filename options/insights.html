@@ -14,7 +14,7 @@
             <span class="brand-dot" aria-hidden="true"></span>
             Intentional
           </h1>
-          <p class="lede">Patterns in how you open distracting sites.</p>
+          <p class="lede">Patterns in how you open and stay on distracting sites.</p>
           <nav class="page-nav" aria-label="Extension pages">
             <a href="options.html" class="page-nav-link">Settings</a>
             <a href="insights.html" class="page-nav-link" aria-current="page"
@@ -51,10 +51,32 @@
         </div>
 
         <div class="subhead">
+          <span>Session check-ins</span>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-num" id="stat-checkin-shown">0</div>
+            <div class="stat-label">Shown</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-checkin-closed">0</div>
+            <div class="stat-label">Closed</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-checkin-extended">0</div>
+            <div class="stat-label">Extended</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num" id="stat-checkin-close-rate">0%</div>
+            <div class="stat-label">Close rate</div>
+          </div>
+        </div>
+
+        <div class="subhead">
           <span>Last 14 days</span>
           <span class="muted" id="chart-summary"></span>
         </div>
-        <div id="chart" class="chart" role="img" aria-label="Daily pauses, last 14 days"></div>
+        <div id="chart" class="chart" role="img" aria-label="Daily events, last 14 days"></div>
 
         <div class="subhead">
           <span>Top sites</span>
@@ -100,7 +122,7 @@
 
       <section class="card">
         <div class="card-head">
-          <h2>Recent intents</h2>
+          <h2>Recent activity</h2>
           <span class="muted" id="history-count">0 entries</span>
         </div>
         <p class="muted history-note" id="history-note"></p>
@@ -153,6 +175,7 @@
       </footer>
     </main>
 
+    <script src="../lib/defaults.js"></script>
     <script src="shared.js"></script>
     <script src="insights.js"></script>
   </body>

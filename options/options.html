@@ -45,9 +45,9 @@
         <label class="field">
           <span class="label">After you continue</span>
           <select id="allow-grace-mode">
+            <option value="continue">Ask again after you continue</option>
             <option value="tab">Stay unblocked until I close the tab</option>
             <option value="minutes">Ask again after a fixed window</option>
-            <option value="0">Ask again on every navigation</option>
           </select>
           <div id="allow-grace-row" class="field-row hidden">
             <input
@@ -68,7 +68,7 @@
         </label>
 
         <label class="field">
-          <span class="label">First check-in (minutes)</span>
+          <span class="label">Check-in interval (minutes)</span>
           <input
             id="check-in-minutes"
             type="number"
@@ -79,23 +79,8 @@
           />
           <span class="hint">
             After you continue past the entry gate, how long before a gentle
-            in-page check-in appears. Default 15. Whole minutes only.
-          </span>
-        </label>
-
-        <label class="field">
-          <span class="label">Extension length (minutes)</span>
-          <input
-            id="check-in-extend-minutes"
-            type="number"
-            min="1"
-            max="120"
-            step="1"
-            inputmode="numeric"
-          />
-          <span class="hint">
-            When you choose to stay, how much longer before the next check-in.
-            Default 10. Whole minutes only.
+            in-page check-in appears — and the same interval between each
+            check-in if you stay. Default 10. Whole minutes only.
           </span>
         </label>
 
@@ -127,6 +112,7 @@
       </footer>
     </main>
 
+    <script src="../lib/defaults.js"></script>
     <script src="shared.js"></script>
     <script src="settings.js"></script>
   </body>

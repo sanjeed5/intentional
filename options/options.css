@@ -568,6 +568,11 @@ td .badge {
   color: var(--danger);
 }
 
+.badge-extend {
+  background: rgba(74, 107, 87, 0.08);
+  color: var(--muted);
+}
+
 .empty td {
   text-align: center;
   color: var(--muted);

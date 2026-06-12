@@ -1,26 +1,20 @@
 // Intentional - background service worker
 // Intercepts navigation to user-defined sites and redirects to a pause page.
 
-importScripts("lib/behavior.js");
+importScripts("lib/defaults.js", "lib/behavior.js");
 
 const behavior = globalThis.IntentionalBehavior;
-const behaviorFindBlockingPattern = behavior.findBlockingPattern;
-const behaviorAllowanceKey = behavior.allowanceKey;
 const behaviorResolvePattern = behavior.resolvePattern;
+const behaviorShouldInterceptNavigation = behavior.shouldInterceptNavigation;
+const behaviorCreateAllowanceStore = behavior.createAllowanceStore;
 const behaviorTabStillOnBlockedHost = behavior.tabStillOnBlockedHost;
+const behaviorCheckInCloseHistoryEntry = behavior.checkInCloseHistoryEntry;
+const behaviorShouldRecordCheckInCloseOnTabRemoved =
+  behavior.shouldRecordCheckInCloseOnTabRemoved;
 
-const PENDING_ALLOWANCES = new Set();
 const CHECKIN_RETRY_MS = 60 * 1000;
 
-const DEFAULTS = {
-  blockedSites: ["x.com", "twitter.com"],
-  pauseSeconds: 10,
-  // Once user clicks Continue, allow the site in the same tab before pausing
-  // again. -1 = until tab closes, 0 = every navigation, >0 = minutes.
-  allowGraceMinutes: -1,
-  checkInMinutes: 15,
-  checkInExtendMinutes: 10,
-};
+const EXT_DEFAULTS = globalThis.IntentionalDefaults.INTENTIONAL_DEFAULTS;
 
 const ALLOW_KEY = "allowedSessions";
 const TAB_SESSIONS_KEY = "tabSessions";
@@ -36,96 +30,68 @@ async function getSettings() {
     "pauseSeconds",
     "allowGraceMinutes",
     "checkInMinutes",
-    "checkInExtendMinutes",
   ]);
   return {
     blockedSites: Array.isArray(stored.blockedSites)
       ? stored.blockedSites
-      : DEFAULTS.blockedSites,
+      : EXT_DEFAULTS.blockedSites,
     pauseSeconds:
       typeof stored.pauseSeconds === "number" && stored.pauseSeconds >= 0
         ? stored.pauseSeconds
-        : DEFAULTS.pauseSeconds,
+        : EXT_DEFAULTS.pauseSeconds,
     allowGraceMinutes:
       typeof stored.allowGraceMinutes === "number" &&
       stored.allowGraceMinutes >= -1
         ? stored.allowGraceMinutes
-        : DEFAULTS.allowGraceMinutes,
+        : EXT_DEFAULTS.allowGraceMinutes,
     checkInMinutes:
       typeof stored.checkInMinutes === "number" && stored.checkInMinutes >= 1
         ? Math.min(240, stored.checkInMinutes)
-        : DEFAULTS.checkInMinutes,
-    checkInExtendMinutes:
-      typeof stored.checkInExtendMinutes === "number" &&
-      stored.checkInExtendMinutes >= 1
-        ? Math.min(120, stored.checkInExtendMinutes)
-        : DEFAULTS.checkInExtendMinutes,
+        : EXT_DEFAULTS.checkInMinutes,
   };
 }
 
-async function isAllowed(tabId, host, patterns) {
-  const match = behaviorFindBlockingPattern(host, patterns);
-  if (!match) return false;
+function createChromeAllowanceStore() {
+  const memory = behaviorCreateAllowanceStore();
 
-  const key = behaviorAllowanceKey(tabId, match);
-  const { [ALLOW_KEY]: sessions = {} } = await chrome.storage.session.get(
-    ALLOW_KEY,
-  );
-  const entry = sessions[key];
-  if (entry) {
-    if (Date.now() > entry.expiresAt) {
-      delete sessions[key];
-      PENDING_ALLOWANCES.delete(key);
-      await chrome.storage.session.set({ [ALLOW_KEY]: sessions });
-      return false;
+  async function persistEntries() {
+    const sessions = {};
+    for (const [key, entry] of memory._entries) {
+      sessions[key] = { expiresAt: entry.expiresAt };
     }
-    PENDING_ALLOWANCES.delete(key);
-    return true;
+    await chrome.storage.session.set({ [ALLOW_KEY]: sessions });
   }
-  if (PENDING_ALLOWANCES.has(key)) {
-    PENDING_ALLOWANCES.delete(key);
-    return true;
-  }
-  return false;
+
+  return {
+    async hydrate() {
+      const { [ALLOW_KEY]: sessions = {} } = await chrome.storage.session.get(
+        ALLOW_KEY,
+      );
+      memory._entries.clear();
+      for (const [key, entry] of Object.entries(sessions)) {
+        memory._entries.set(key, { expiresAt: entry.expiresAt });
+      }
+    },
+    async grant(tabId, pattern, minutes) {
+      memory.grant(tabId, pattern, minutes);
+      if (minutes !== 0) await persistEntries();
+    },
+    isAllowed(tabId, host, blockedSites) {
+      const entriesBefore = memory._entries.size;
+      const allowed = memory.isAllowed(tabId, host, blockedSites);
+      if (memory._entries.size !== entriesBefore) {
+        persistEntries().catch(() => {});
+      }
+      return allowed;
+    },
+    async clearTab(tabId) {
+      memory.clearTab(tabId);
+      await persistEntries();
+    },
+  };
 }
 
-async function allowTabPattern(tabId, pattern, minutes) {
-  const key = behaviorAllowanceKey(tabId, pattern);
-  if (minutes === 0) {
-    // One-shot in memory only — not persisted; re-intercept on next navigation.
-    PENDING_ALLOWANCES.add(key);
-    return;
-  }
-
-  PENDING_ALLOWANCES.add(key);
-
-  const { [ALLOW_KEY]: sessions = {} } = await chrome.storage.session.get(
-    ALLOW_KEY,
-  );
-  const expiresAt =
-    minutes < 0
-      ? Number.MAX_SAFE_INTEGER
-      : Date.now() + minutes * 60 * 1000;
-  sessions[key] = { expiresAt };
-  await chrome.storage.session.set({ [ALLOW_KEY]: sessions });
-}
-
-async function clearTabAllowances(tabId) {
-  const { [ALLOW_KEY]: sessions = {} } = await chrome.storage.session.get(
-    ALLOW_KEY,
-  );
-  let changed = false;
-  for (const key of Object.keys(sessions)) {
-    if (key.startsWith(`${tabId}:`)) {
-      delete sessions[key];
-      changed = true;
-    }
-  }
-  if (changed) await chrome.storage.session.set({ [ALLOW_KEY]: sessions });
-  for (const key of PENDING_ALLOWANCES) {
-    if (key.startsWith(`${tabId}:`)) PENDING_ALLOWANCES.delete(key);
-  }
-}
+const allowanceStore = createChromeAllowanceStore();
 
 // ---------- session check-in (Layer 2) ----------
 
@@ -211,8 +177,15 @@ async function injectCheckInOverlay(tabId, session) {
     host: session.host,
     startedAt: session.startedAt,
     checkInCount: session.checkInCount,
-    extendMinutes: settings.checkInExtendMinutes,
+    checkInMinutes: settings.checkInMinutes,
   });
+  await bumpStat("checkInShown");
+  const sessions = await getTabSessions();
+  const stored = sessions[tabId];
+  if (stored) {
+    stored.awaitingCheckIn = true;
+    await setTabSessions(sessions);
+  }
 }
 
 async function handleCheckInAlarm(tabId) {
@@ -276,6 +249,11 @@ async function recordHistory(entry) {
   await chrome.storage.local.set({ [HISTORY_KEY]: history });
 }
 
+async function recordCheckInClose(session) {
+  await bumpStat("checkInClosed");
+  await recordHistory(behaviorCheckInCloseHistoryEntry(session));
+}
+
 // ---------- navigation interception ----------
 
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
@@ -294,15 +272,17 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
   const settings = await getSettings();
-  const match = behaviorFindBlockingPattern(url.hostname, settings.blockedSites);
-  if (!match) return;
-
-  // Don't intercept ourselves
   const interceptUrl = chrome.runtime.getURL("intercept/intercept.html");
-  if (details.url.startsWith(interceptUrl)) return;
 
-  if (await isAllowed(details.tabId, url.hostname, settings.blockedSites))
-    return;
+  await allowanceStore.hydrate();
+  const result = behaviorShouldInterceptNavigation({
+    tabId: details.tabId,
+    host: url.hostname,
+    blockedSites: settings.blockedSites,
+    allowances: allowanceStore,
+    isExtensionUrl: details.url.startsWith(interceptUrl),
+  });
+  if (result === false) return;
 
   await bumpStat("intercepted");
 
@@ -313,7 +293,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     "&host=" +
     encodeURIComponent(url.hostname) +
     "&pattern=" +
-    encodeURIComponent(match);
+    encodeURIComponent(result.pattern);
 
   try {
     await chrome.tabs.update(details.tabId, { url: redirect });
@@ -324,8 +304,15 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 
 // Clean up allowances and check-in sessions when tab closes
 chrome.tabs.onRemoved.addListener((tabId) => {
-  clearTabAllowances(tabId);
-  clearTabSession(tabId);
+  (async () => {
+    const sessions = await getTabSessions();
+    const session = sessions[tabId];
+    if (behaviorShouldRecordCheckInCloseOnTabRemoved(session)) {
+      await recordCheckInClose(session);
+    }
+    await allowanceStore.clearTab(tabId);
+    await clearTabSession(tabId);
+  })();
 });
 
 // Clear check-in session when the tab leaves a blocked host
@@ -357,130 +344,113 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // ---------- messaging from intercept page ----------
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  (async () => {
-    if (msg?.type === "GET_SETTINGS") {
-      sendResponse(await getSettings());
-      return;
-    }
+const messageHandlers = {
+  GET_SETTINGS: async () => getSettings(),
 
-    if (msg?.type === "CONTINUE") {
-      const tabId = sender.tab?.id;
-      if (!tabId) {
-        sendResponse({ ok: false, error: "no tab" });
-        return;
-      }
-      const { target, host, pattern, intent } = msg;
-      const settings = await getSettings();
-      const matchedPattern = behaviorResolvePattern(
-        target,
-        pattern,
-        settings.blockedSites,
-      );
-      if (!matchedPattern) {
-        sendResponse({ ok: false, error: "invalid target" });
-        return;
-      }
-      await allowTabPattern(
-        tabId,
-        matchedPattern,
-        settings.allowGraceMinutes,
-      );
-      await bumpStat("continued");
-      await recordHistory({
-        action: "continue",
-        host,
-        pattern,
-        target,
-        intent: sliceIntent(intent),
-        at: Date.now(),
-      });
-      await startTabSession(tabId, {
-        pattern: matchedPattern,
-        host: host || "",
-        intent: sliceIntent(intent),
-      });
-      try {
-        await chrome.tabs.update(tabId, { url: target });
-      } catch (e) {
-        // ignore
-      }
-      sendResponse({ ok: true });
-      return;
+  CONTINUE: async (msg, sender) => {
+    const tabId = sender.tab?.id;
+    if (!tabId) return { ok: false, error: "no tab" };
+    const { target, host, pattern, intent } = msg;
+    const settings = await getSettings();
+    const matchedPattern = behaviorResolvePattern(
+      target,
+      pattern,
+      settings.blockedSites,
+    );
+    if (!matchedPattern) return { ok: false, error: "invalid target" };
+    await allowanceStore.grant(
+      tabId,
+      matchedPattern,
+      settings.allowGraceMinutes,
+    );
+    await bumpStat("continued");
+    await recordHistory({
+      action: "continue",
+      host,
+      pattern,
+      target,
+      intent: sliceIntent(intent),
+      at: Date.now(),
+    });
+    await startTabSession(tabId, {
+      pattern: matchedPattern,
+      host: host || "",
+      intent: sliceIntent(intent),
+    });
+    try {
+      await chrome.tabs.update(tabId, { url: target });
+    } catch {
+      // ignore
     }
+    return { ok: true };
+  },
 
-    if (msg?.type === "CHECKIN_CONTINUE") {
-      const tabId = sender.tab?.id;
-      if (!tabId) {
-        sendResponse({ ok: false, error: "no tab" });
-        return;
-      }
+  CHECKIN_CONTINUE: async (_msg, sender) => {
+    const tabId = sender.tab?.id;
+    if (!tabId) return { ok: false, error: "no tab" };
+    const sessions = await getTabSessions();
+    const session = sessions[tabId];
+    if (!session) return { ok: false, error: "no session" };
+    const settings = await getSettings();
+    const now = Date.now();
+      session.nextCheckInAt = now + settings.checkInMinutes * 60 * 1000;
+    session.checkInCount += 1;
+    session.awaitingCheckIn = false;
+    await setTabSessions(sessions);
+    await scheduleCheckIn(tabId, session.nextCheckInAt);
+    await bumpStat("checkInExtended");
+    await recordHistory({
+      action: "checkin_extend",
+      host: session.host,
+      pattern: session.pattern,
+      intent: session.intent,
+      checkInCount: session.checkInCount,
+      at: now,
+    });
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: "HIDE_CHECKIN" });
+    } catch {}
+    return { ok: true };
+  },
+
+  CHECKIN_CLOSE: async (_msg, sender) => {
+    const tabId = sender.tab?.id;
+    if (tabId) {
       const sessions = await getTabSessions();
       const session = sessions[tabId];
-      if (!session) {
-        sendResponse({ ok: false, error: "no session" });
-        return;
+      if (session) {
+        await recordCheckInClose(session);
       }
-      const settings = await getSettings();
-      const now = Date.now();
-      session.nextCheckInAt =
-        now + settings.checkInExtendMinutes * 60 * 1000;
-      session.checkInCount += 1;
-      await setTabSessions(sessions);
-      await scheduleCheckIn(tabId, session.nextCheckInAt);
-      try {
-        await chrome.tabs.sendMessage(tabId, { type: "HIDE_CHECKIN" });
-      } catch {}
-      sendResponse({ ok: true });
-      return;
+      await clearTabSession(tabId);
+      await closeTab(tabId);
     }
+    return { ok: true };
+  },
 
-    if (msg?.type === "CHECKIN_CLOSE") {
-      const tabId = sender.tab?.id;
-      if (tabId) {
-        await clearTabSession(tabId);
-        await closeTab(tabId);
-      }
-      sendResponse({ ok: true });
-      return;
-    }
+  CANCEL: async (msg, sender) => {
+    const tabId = sender.tab?.id;
+    const { host, pattern, intent, target } = msg;
+    await bumpStat("cancelled");
+    await recordHistory({
+      action: "cancel",
+      host,
+      pattern,
+      target,
+      intent: sliceIntent(intent),
+      at: Date.now(),
+    });
+    if (tabId) await closeTab(tabId);
+    return { ok: true };
+  },
+};
 
-    if (msg?.type === "CANCEL") {
-      const tabId = sender.tab?.id;
-      const { host, pattern, intent, target } = msg;
-      await bumpStat("cancelled");
-      await recordHistory({
-        action: "cancel",
-        host,
-        pattern,
-        target,
-        intent: sliceIntent(intent),
-        at: Date.now(),
-      });
-      if (tabId) await closeTab(tabId);
-      sendResponse({ ok: true });
-      return;
-    }
-
-    if (msg?.type === "OPEN_INSIGHTS") {
-      try {
-        await chrome.tabs.create({
-          url: chrome.runtime.getURL("options/insights.html"),
-        });
-      } catch {}
-      sendResponse({ ok: true });
-      return;
-    }
-
-    if (msg?.type === "OPEN_OPTIONS") {
-      try {
-        await chrome.runtime.openOptionsPage();
-      } catch {}
-      sendResponse({ ok: true });
-      return;
-    }
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const handler = messageHandlers[msg?.type];
+  if (!handler) return;
+  (async () => {
+    sendResponse(await handler(msg, sender));
   })();
-  return true; // keep the message channel open for async sendResponse
+  return true;
 });
 
 // Toolbar icon opens Insights; intercept page links open Insights or Settings.
@@ -497,18 +467,15 @@ chrome.runtime.onInstalled.addListener(async () => {
     "pauseSeconds",
     "allowGraceMinutes",
     "checkInMinutes",
-    "checkInExtendMinutes",
   ]);
   const patch = {};
   if (!Array.isArray(stored.blockedSites))
-    patch.blockedSites = DEFAULTS.blockedSites;
+    patch.blockedSites = EXT_DEFAULTS.blockedSites;
   if (typeof stored.pauseSeconds !== "number")
-    patch.pauseSeconds = DEFAULTS.pauseSeconds;
+    patch.pauseSeconds = EXT_DEFAULTS.pauseSeconds;
   if (typeof stored.allowGraceMinutes !== "number")
-    patch.allowGraceMinutes = DEFAULTS.allowGraceMinutes;
+    patch.allowGraceMinutes = EXT_DEFAULTS.allowGraceMinutes;
   if (typeof stored.checkInMinutes !== "number")
-    patch.checkInMinutes = DEFAULTS.checkInMinutes;
-  if (typeof stored.checkInExtendMinutes !== "number")
-    patch.checkInExtendMinutes = DEFAULTS.checkInExtendMinutes;
+    patch.checkInMinutes = EXT_DEFAULTS.checkInMinutes;
   if (Object.keys(patch).length) await chrome.storage.local.set(patch);
 });

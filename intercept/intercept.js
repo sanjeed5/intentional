@@ -2,6 +2,8 @@
 // Reads the target URL from the query string, runs a guided breathing pause,
 // then asks the user for an intent before continuing or cancelling.
 
+const { normalizeHost } = globalThis.IntentionalBehavior;
+
 const params = new URLSearchParams(window.location.search);
 const target = params.get("target") || "";
 const host = params.get("host") || "";
@@ -197,10 +199,6 @@ function showPrompt() {
   }, 280);
 }
 
-function normalizeHost(h) {
-  return (h || "").toLowerCase().replace(/^www\./, "");
-}
-
 function relativeTime(ts) {
   const diff = Date.now() - ts;
   const mins = Math.round(diff / 60000);
@@ -213,17 +211,27 @@ function relativeTime(ts) {
   return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+function entryMatchesSite(entry) {
+  const sitePattern = pattern ? normalizeHost(pattern) : "";
+  const siteHost = host ? normalizeHost(host) : "";
+  if (!sitePattern && !siteHost) return false;
+  if (sitePattern && entry.pattern) {
+    if (normalizeHost(entry.pattern) === sitePattern) return true;
+  }
+  if (siteHost) {
+    if (normalizeHost(entry.host) === siteHost) return true;
+  }
+  return false;
+}
+
 async function loadRecentIntents() {
   try {
     const { history = [] } = await chrome.storage.local.get("history");
-    const needle = normalizeHost(host);
-    if (!needle) return;
+    if (!pattern && !host) return;
     const matches = history
       .filter(
         (h) =>
-          normalizeHost(h.host) === needle &&
-          h.intent &&
-          h.intent.trim().length > 0,
+          entryMatchesSite(h) && h.intent && h.intent.trim().length > 0,
       )
       .slice(0, RECENT_INTENT_COUNT);
 
@@ -329,10 +337,10 @@ els.continueBtn.addEventListener("click", onContinue);
 els.cancelBtn.addEventListener("click", onCancel);
 els.pauseCancelBtn.addEventListener("click", onCancel);
 els.insightsBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "OPEN_INSIGHTS" });
+  chrome.tabs.create({ url: chrome.runtime.getURL("options/insights.html") });
 });
 els.settingsBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "OPEN_OPTIONS" });
+  chrome.runtime.openOptionsPage();
 });
 
 els.intent.addEventListener("input", updateCounter);

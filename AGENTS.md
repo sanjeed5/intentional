@@ -13,8 +13,8 @@
 - Two-layer model: Layer 1 entry gate (`webNavigation.onBeforeNavigate` → `intercept/`), Layer 2 session check-in (`chrome.alarms` + `chrome.scripting` overlay in `checkin/`).
 - Entry allowances stored in `chrome.storage.session` keyed by `tabId:blockingPattern` (not exact hostname) so subdomains share state.
 - Session check-in state also in `chrome.storage.session` (`tabSessions`), keyed by `tabId`, with alarms named `checkin:${tabId}`.
-- Default entry grace: until tab closes (`allowGraceMinutes: -1`). `0` = every navigation, `>0` = fixed minutes.
-- Default check-in: 15 min first delay, 10 min per extension.
+- Default entry grace: re-prompt on next navigation after continue (`allowGraceMinutes: 0`). `-1` = until tab closes, `>0` = fixed minutes.
+- Default check-in interval: 10 min (same for first check-in and each stay).
 - `x.com` and `twitter.com` are separate blocked patterns and separate session/allowance keys.
 - Layer 2 must be time-based, not navigation-based — SPAs like X/Twitter scroll without firing `onBeforeNavigate`.
 - Stats/history in `chrome.storage.local` only. No network calls.

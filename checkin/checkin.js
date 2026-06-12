@@ -78,7 +78,7 @@ function hideOverlay() {
 
 function showOverlay(data) {
   const root = ensureRoot();
-  const { intent, host, startedAt, extendMinutes = 10 } = data;
+  const { intent, host, startedAt, checkInMinutes = 10 } = data;
   const elapsed = formatElapsed(Math.max(0, Date.now() - startedAt));
 
   root.querySelector("#intentional-checkin-intent").textContent =
@@ -91,9 +91,9 @@ function showOverlay(data) {
   hostEl.textContent = host || "this site";
   elapsedEl.append(hostEl, ` for ${elapsed}.`);
   root.querySelector("#intentional-checkin-extend").textContent =
-    extendMinutes === 1
+    checkInMinutes === 1
       ? "Continue 1 more min"
-      : `Continue ${extendMinutes} more min`;
+      : `Continue ${checkInMinutes} more min`;
 
   setBusy(false);
   root.classList.remove("intentional-hidden");

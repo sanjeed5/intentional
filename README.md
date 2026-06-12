@@ -40,7 +40,7 @@ the blocked sites and timing on the settings page.
   <kbd>Enter</kbd> closes the tab; <kbd>⌘</kbd><kbd>Enter</kbd> extends the
   session.
 - **Session check-in** — after you continue past the entry gate, a gentle
-  in-page overlay appears once your session time is up (default 15 minutes).
+  in-page overlay appears once your session time is up (default 10 minutes).
   It shows your original intent and elapsed time. **Close tab** is the primary
   action; **Continue** grants another window (default 10 minutes) before the
   next check-in. Works on SPAs like X/Twitter without navigation.
@@ -70,13 +70,13 @@ click away via the nav, or from the pause screen.
    and a countdown.
 3. After the countdown, type a reason (at least three real characters).
 4. Click **Continue** — the original URL loads, and the same site stays open
-   in that tab without re-pausing until you close the tab (configurable).
+   in that tab without re-pausing until your next navigation (configurable).
 5. Or click **Cancel** — the tab closes (or goes blank if it's the only tab).
 
 ### Session check-in (Layer 2)
 
 1. After continuing, stay on the blocked site for the check-in interval
-   (default 15 min — shorten it in settings for faster testing).
+   (default 10 min — shorten it in settings for faster testing).
 2. Scroll around without navigating — the overlay should still appear on
    SPAs like X/Twitter.
 3. The overlay shows your intent and elapsed time.
@@ -96,13 +96,12 @@ To open pages:
 - **Pause length (seconds)** — how long the breath runs before the prompt.
   Default `10`. Set to `0` to skip the breath and go straight to the prompt.
 - **After you continue** — controls when the entry gate appears again in the
-  same tab. Default: stay unblocked until you close the tab. You can also
-  choose a fixed window (1–240 minutes) or be prompted on every navigation.
-  Subdomains count as the same site.
-- **First check-in (minutes)** — delay after continuing before the in-page
-  check-in overlay. Default `15`.
-- **Extension length (minutes)** — how long each "Continue" grants before the
-  next check-in. Default `10`.
+  same tab. Default: ask again after you continue (re-prompt on the next
+  navigation). You can also stay unblocked until you close the tab, or choose
+  a fixed window (1–240 minutes). Subdomains count as the same site.
+- **Check-in interval (minutes)** — delay after continuing before the in-page
+  check-in overlay, and the same interval between each check-in if you stay.
+  Default `10`.
 - **Blocked sites** — one hostname per line. Subdomains match automatically:
   `twitter.com` also catches `mobile.twitter.com`. `x.com` and `twitter.com`
   are separate entries.

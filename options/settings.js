@@ -6,7 +6,6 @@ const els = {
   allowGraceRow: document.getElementById("allow-grace-row"),
   allowGrace: document.getElementById("allow-grace"),
   checkInMinutes: document.getElementById("check-in-minutes"),
-  checkInExtendMinutes: document.getElementById("check-in-extend-minutes"),
   blockedSites: document.getElementById("blocked-sites"),
   saveBtn: document.getElementById("save-btn"),
   resetBtn: document.getElementById("reset-btn"),
@@ -23,7 +22,6 @@ async function loadSettings() {
     "pauseSeconds",
     "allowGraceMinutes",
     "checkInMinutes",
-    "checkInExtendMinutes",
   ]);
 
   els.pauseSeconds.value = String(
@@ -41,11 +39,6 @@ async function loadSettings() {
     typeof stored.checkInMinutes === "number"
       ? stored.checkInMinutes
       : INTENTIONAL_DEFAULTS.checkInMinutes,
-  );
-  els.checkInExtendMinutes.value = String(
-    typeof stored.checkInExtendMinutes === "number"
-      ? stored.checkInExtendMinutes
-      : INTENTIONAL_DEFAULTS.checkInExtendMinutes,
   );
   const sites = Array.isArray(stored.blockedSites)
     ? stored.blockedSites
@@ -76,7 +69,7 @@ async function saveSettings() {
   const checkInResult = readWholeNumber(els.checkInMinutes.value, {
     min: 1,
     max: 240,
-    label: "First check-in",
+    label: "Check-in interval",
   });
   if (!checkInResult.ok) {
     setStatus(checkInResult.error, "err");
@@ -84,33 +77,19 @@ async function saveSettings() {
     return;
   }
 
-  const extendResult = readWholeNumber(els.checkInExtendMinutes.value, {
-    min: 1,
-    max: 120,
-    label: "Extension length",
-  });
-  if (!extendResult.ok) {
-    setStatus(extendResult.error, "err");
-    els.checkInExtendMinutes.focus();
-    return;
-  }
-
   const pauseSeconds = pauseResult.value;
   const checkInMinutes = checkInResult.value;
-  const checkInExtendMinutes = extendResult.value;
   const blockedSites = parseSites(els.blockedSites.value);
 
   await chrome.storage.local.set({
     pauseSeconds,
     allowGraceMinutes,
     checkInMinutes,
-    checkInExtendMinutes,
     blockedSites,
   });
 
   els.pauseSeconds.value = String(pauseSeconds);
   els.checkInMinutes.value = String(checkInMinutes);
-  els.checkInExtendMinutes.value = String(checkInExtendMinutes);
   applyGraceModeUI(els, graceResult.value);
   els.blockedSites.value = blockedSites.join("\n");
 
@@ -122,7 +101,6 @@ async function resetSettings() {
     pauseSeconds: INTENTIONAL_DEFAULTS.pauseSeconds,
     allowGraceMinutes: INTENTIONAL_DEFAULTS.allowGraceMinutes,
     checkInMinutes: INTENTIONAL_DEFAULTS.checkInMinutes,
-    checkInExtendMinutes: INTENTIONAL_DEFAULTS.checkInExtendMinutes,
     blockedSites: INTENTIONAL_DEFAULTS.blockedSites.slice(),
   });
   await loadSettings();
@@ -143,8 +121,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     changes.blockedSites ||
     changes.pauseSeconds ||
     changes.allowGraceMinutes ||
-    changes.checkInMinutes ||
-    changes.checkInExtendMinutes
+    changes.checkInMinutes
   ) {
     loadSettings();
   }

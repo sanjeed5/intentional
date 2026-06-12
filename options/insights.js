@@ -11,6 +11,10 @@ const els = {
   statContinued: document.getElementById("stat-continued"),
   statCancelled: document.getElementById("stat-cancelled"),
   statCancelRate: document.getElementById("stat-cancel-rate"),
+  statCheckInShown: document.getElementById("stat-checkin-shown"),
+  statCheckInClosed: document.getElementById("stat-checkin-closed"),
+  statCheckInExtended: document.getElementById("stat-checkin-extended"),
+  statCheckInCloseRate: document.getElementById("stat-checkin-close-rate"),
   chart: document.getElementById("chart"),
   chartSummary: document.getElementById("chart-summary"),
   topSites: document.getElementById("top-sites"),
@@ -32,10 +36,6 @@ function setStatus(msg, kind = "ok") {
   flashStatus(els.status, msg, kind);
 }
 
-function cancelRate(cancelled, total) {
-  return total > 0 ? Math.round((cancelled / total) * 100) : 0;
-}
-
 async function loadStats() {
   const { stats = {}, history = [] } = await chrome.storage.local.get([
     "stats",
@@ -46,11 +46,21 @@ async function loadStats() {
   const cancelled = stats.cancelled || 0;
   const decided = continued + cancelled;
   const rate = cancelRate(cancelled, decided);
+  const checkInShown = stats.checkInShown || 0;
+  const checkInClosed = stats.checkInClosed || 0;
+  const checkInExtended = stats.checkInExtended || 0;
+  const checkInDecided = checkInClosed + checkInExtended;
+  const checkInRate = cancelRate(checkInClosed, checkInDecided);
 
   els.statIntercepted.textContent = String(intercepted);
   els.statContinued.textContent = String(continued);
   els.statCancelled.textContent = String(cancelled);
   els.statCancelRate.textContent = `${rate}%`;
+  els.statCheckInShown.textContent = String(checkInShown);
+  els.statCheckInClosed.textContent = String(checkInClosed);
+  els.statCheckInExtended.textContent = String(checkInExtended);
+  els.statCheckInCloseRate.textContent =
+    checkInDecided > 0 ? `${checkInRate}%` : "—";
 
   const insights = computeInsights(history);
   renderChart(history);
@@ -76,7 +86,7 @@ function renderChart(history) {
   const max = Math.max(1, ...days.map((d) => d.count));
   const total = days.reduce((sum, d) => sum + d.count, 0);
   els.chartSummary.textContent =
-    total === 0 ? "no activity yet" : `${total} decisions`;
+    total === 0 ? "no activity yet" : `${total} events`;
 
   const todayKey = today.getTime();
 
@@ -107,7 +117,7 @@ function renderChart(history) {
           day: "numeric",
         }) +
         " — " +
-        (d.count === 1 ? "1 pause" : `${d.count} pauses`);
+        (d.count === 1 ? "1 event" : `${d.count} events`);
       bar.append(fill, label);
       return bar;
     }),
@@ -141,52 +151,16 @@ function renderTopSites(history) {
       const ratioSpan = document.createElement("span");
       ratioSpan.textContent = `${cancelRate(rec.cancelled, rec.continued + rec.cancelled)}% cancelled`;
       meta.append(pill, ratioSpan);
+      const checkIns = rec.checkInClosed + rec.checkInExtended;
+      if (checkIns > 0) {
+        const checkInSpan = document.createElement("span");
+        checkInSpan.textContent = `${checkIns} check-in${checkIns === 1 ? "" : "s"} · ${cancelRate(rec.checkInClosed, checkIns)}% closed`;
+        meta.appendChild(checkInSpan);
+      }
       li.append(hostEl, meta);
       return li;
     }),
   );
-}
-
-function computeInsights(history) {
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const recent = history.filter((e) => e.at >= weekAgo);
-  const recentDecided = recent.filter(
-    (e) => e.action === "continue" || e.action === "cancel",
-  );
-  const recentCancelled = recent.filter((e) => e.action === "cancel").length;
-
-  const intentCounts = new Map();
-  for (const entry of history) {
-    const intent = (entry.intent || "").trim().toLowerCase();
-    if (intent.length < 3) continue;
-    intentCounts.set(intent, (intentCounts.get(intent) || 0) + 1);
-  }
-  const repeatedIntents = Array.from(intentCounts.entries())
-    .filter(([, count]) => count >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([intent, count]) => ({ intent, count }));
-
-  const hourCounts = new Array(24).fill(0);
-  for (const entry of history) {
-    hourCounts[new Date(entry.at).getHours()] += 1;
-  }
-  const peakHour = hourCounts.indexOf(Math.max(...hourCounts));
-  const peakCount = hourCounts[peakHour];
-  const busiestHour =
-    history.length > 0 && peakCount > 0
-      ? { label: formatHourRange(peakHour), count: peakCount }
-      : null;
-
-  return {
-    recentDecisions: recentDecided.length,
-    recentCancelRate:
-      recentDecided.length > 0
-        ? cancelRate(recentCancelled, recentDecided.length)
-        : null,
-    repeatedIntents,
-    busiestHour,
-  };
 }
 
 function renderInsights(insights) {
@@ -216,14 +190,15 @@ function renderInsights(insights) {
 }
 
 function buildAnalysisPrompt() {
-  return `I'm using Intentional, a browser extension that pauses before distracting sites and asks me to type why I want to visit. I then choose to continue or cancel.
+  return `I'm using Intentional, a browser extension that pauses before distracting sites and asks me to type why I want to visit. I then choose to continue or cancel. If I stay, it checks in later and asks whether to close the tab or extend.
 
 I've attached ${ANALYSIS_EXPORT_FILENAME} from my Downloads folder. Analyze it and look for:
 1. Recurring intent patterns — vague or repeated excuses ("just checking", "bored", "quick look")
 2. Time-of-day patterns — when am I most vulnerable?
 3. Cancel rate — am I getting better at closing tabs instead of continuing?
-4. Site-specific habits — which sites have the worst cancel rates?
-5. Concrete suggestions — 2–3 specific changes based on MY data, not generic advice`;
+4. Rabbit-hole patterns — at session check-ins, do I mostly extend or close? Same intent extended multiple times?
+5. Site-specific habits — which sites have the worst cancel rates?
+6. Concrete suggestions — 2–3 specific changes based on MY data, not generic advice`;
 }
 
 function renderAnalysisPrompt(history) {
@@ -246,8 +221,6 @@ async function buildExportPayload() {
     allowGraceMinutes:
       data.allowGraceMinutes ?? INTENTIONAL_DEFAULTS.allowGraceMinutes,
     checkInMinutes: data.checkInMinutes ?? INTENTIONAL_DEFAULTS.checkInMinutes,
-    checkInExtendMinutes:
-      data.checkInExtendMinutes ?? INTENTIONAL_DEFAULTS.checkInExtendMinutes,
     stats: data.stats ?? {},
     history: data.history ?? [],
   };
@@ -301,9 +274,9 @@ function renderHistory(history) {
       tdIntent.textContent = entry.intent || "—";
       const tdAction = document.createElement("td");
       const badge = document.createElement("span");
-      const continued = entry.action === "continue";
-      badge.className = "badge " + (continued ? "badge-continue" : "badge-cancel");
-      badge.textContent = continued ? "Continued" : "Cancelled";
+      const { className, label } = historyActionBadge(entry);
+      badge.className = className;
+      badge.textContent = label;
       tdAction.appendChild(badge);
       tr.append(tdWhen, tdHost, tdIntent, tdAction);
       return tr;
@@ -369,8 +342,6 @@ async function importData(file) {
     toSet.allowGraceMinutes = clamp(parsed.allowGraceMinutes, -1, 240);
   if (typeof parsed.checkInMinutes === "number")
     toSet.checkInMinutes = clamp(parsed.checkInMinutes, 1, 240);
-  if (typeof parsed.checkInExtendMinutes === "number")
-    toSet.checkInExtendMinutes = clamp(parsed.checkInExtendMinutes, 1, 120);
   if (parsed.stats && typeof parsed.stats === "object")
     toSet.stats = parsed.stats;
   if (Array.isArray(parsed.history))
