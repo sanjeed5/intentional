@@ -5,7 +5,8 @@ const els = {
   allowGraceMode: document.getElementById("allow-grace-mode"),
   allowGraceRow: document.getElementById("allow-grace-row"),
   allowGrace: document.getElementById("allow-grace"),
-  checkInMinutes: document.getElementById("check-in-minutes"),
+  checkInSeconds: document.getElementById("check-in-seconds"),
+  skipEntryGate: document.getElementById("skip-entry-gate"),
   blockedSites: document.getElementById("blocked-sites"),
   saveBtn: document.getElementById("save-btn"),
   resetBtn: document.getElementById("reset-btn"),
@@ -22,6 +23,8 @@ async function loadSettings() {
     "pauseSeconds",
     "allowGraceMinutes",
     "checkInMinutes",
+    "checkInSeconds",
+    "skipEntryGate",
   ]);
 
   els.pauseSeconds.value = String(
@@ -35,11 +38,15 @@ async function loadSettings() {
       ? stored.allowGraceMinutes
       : INTENTIONAL_DEFAULTS.allowGraceMinutes,
   );
-  els.checkInMinutes.value = String(
-    typeof stored.checkInMinutes === "number"
-      ? stored.checkInMinutes
-      : INTENTIONAL_DEFAULTS.checkInMinutes,
+  els.checkInSeconds.value = String(
+    typeof stored.checkInSeconds === "number"
+      ? stored.checkInSeconds
+      : INTENTIONAL_DEFAULTS.checkInSeconds,
   );
+  els.skipEntryGate.checked =
+    typeof stored.skipEntryGate === "boolean"
+      ? stored.skipEntryGate
+      : INTENTIONAL_DEFAULTS.skipEntryGate;
   const sites = Array.isArray(stored.blockedSites)
     ? stored.blockedSites
     : INTENTIONAL_DEFAULTS.blockedSites;
@@ -66,30 +73,33 @@ async function saveSettings() {
   }
   const allowGraceMinutes = graceResult.value;
 
-  const checkInResult = readWholeNumber(els.checkInMinutes.value, {
+  const checkInResult = readWholeNumber(els.checkInSeconds.value, {
     min: 1,
-    max: 240,
-    label: "Check-in interval",
+    max: 3600,
+    label: "Paper interrupt",
   });
   if (!checkInResult.ok) {
     setStatus(checkInResult.error, "err");
-    els.checkInMinutes.focus();
+    els.checkInSeconds.focus();
     return;
   }
 
   const pauseSeconds = pauseResult.value;
-  const checkInMinutes = checkInResult.value;
+  const checkInSeconds = checkInResult.value;
+  const skipEntryGate = els.skipEntryGate.checked;
   const blockedSites = parseSites(els.blockedSites.value);
 
   await chrome.storage.local.set({
     pauseSeconds,
     allowGraceMinutes,
-    checkInMinutes,
+    checkInSeconds,
+    skipEntryGate,
     blockedSites,
   });
 
   els.pauseSeconds.value = String(pauseSeconds);
-  els.checkInMinutes.value = String(checkInMinutes);
+  els.checkInSeconds.value = String(checkInSeconds);
+  els.skipEntryGate.checked = skipEntryGate;
   applyGraceModeUI(els, graceResult.value);
   els.blockedSites.value = blockedSites.join("\n");
 
@@ -101,6 +111,8 @@ async function resetSettings() {
     pauseSeconds: INTENTIONAL_DEFAULTS.pauseSeconds,
     allowGraceMinutes: INTENTIONAL_DEFAULTS.allowGraceMinutes,
     checkInMinutes: INTENTIONAL_DEFAULTS.checkInMinutes,
+    checkInSeconds: INTENTIONAL_DEFAULTS.checkInSeconds,
+    skipEntryGate: INTENTIONAL_DEFAULTS.skipEntryGate,
     blockedSites: INTENTIONAL_DEFAULTS.blockedSites.slice(),
   });
   await loadSettings();
@@ -121,7 +133,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     changes.blockedSites ||
     changes.pauseSeconds ||
     changes.allowGraceMinutes ||
-    changes.checkInMinutes
+    changes.checkInMinutes ||
+    changes.checkInSeconds ||
+    changes.skipEntryGate
   ) {
     loadSettings();
   }

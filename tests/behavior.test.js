@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 
 const {
   findBlockingPattern,
+  isInterruptUrl,
+  tabStillOnInterruptUrl,
   allowanceKey,
   resolvePattern,
   createAllowanceStore,
@@ -224,6 +226,58 @@ describe("session check-in — mindless staying", () => {
         BLOCKED,
       ),
       false,
+    );
+  });
+});
+
+describe("paper interrupt URLs", () => {
+  const SITES = [
+    "x.com",
+    "twitter.com",
+    "instagram.com",
+    "youtube.com",
+    "m.youtube.com",
+  ];
+
+  it("shows the paper on Instagram, X, Twitter, and YouTube Shorts", () => {
+    assert.equal(isInterruptUrl("https://www.instagram.com/", SITES), true);
+    assert.equal(isInterruptUrl("https://x.com/home", SITES), true);
+    assert.equal(isInterruptUrl("https://twitter.com/home", SITES), true);
+    assert.equal(isInterruptUrl("https://www.youtube.com/shorts", SITES), true);
+    assert.equal(
+      isInterruptUrl("https://www.youtube.com/shorts/abc123", SITES),
+      true,
+    );
+    assert.equal(
+      isInterruptUrl("https://m.youtube.com/shorts/abc123", SITES),
+      true,
+    );
+  });
+
+  it("does not show the paper on regular YouTube", () => {
+    assert.equal(isInterruptUrl("https://www.youtube.com/", SITES), false);
+    assert.equal(
+      isInterruptUrl("https://www.youtube.com/watch?v=abc", SITES),
+      false,
+    );
+  });
+
+  it("clears the session when leaving Shorts for a regular YouTube page", () => {
+    assert.equal(
+      tabStillOnInterruptUrl(
+        "https://www.youtube.com/watch?v=abc",
+        "youtube.com",
+        SITES,
+      ),
+      false,
+    );
+    assert.equal(
+      tabStillOnInterruptUrl(
+        "https://www.youtube.com/shorts/abc",
+        "youtube.com",
+        SITES,
+      ),
+      true,
     );
   });
 });

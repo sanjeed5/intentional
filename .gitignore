@@ -20,3 +20,6 @@ data/intentional-export.json
 # Env / secrets
 .env
 .env.*
+
+# Local Myinstants hits (do not push copyrighted audio)
+sounds/*.mp3

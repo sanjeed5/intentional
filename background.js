@@ -5,9 +5,10 @@ importScripts("lib/defaults.js", "lib/behavior.js");
 
 const behavior = globalThis.IntentionalBehavior;
 const behaviorResolvePattern = behavior.resolvePattern;
+const behaviorFindBlockingPattern = behavior.findBlockingPattern;
+const behaviorIsInterruptUrl = behavior.isInterruptUrl;
 const behaviorShouldInterceptNavigation = behavior.shouldInterceptNavigation;
 const behaviorCreateAllowanceStore = behavior.createAllowanceStore;
-const behaviorTabStillOnBlockedHost = behavior.tabStillOnBlockedHost;
 const behaviorCheckInCloseHistoryEntry = behavior.checkInCloseHistoryEntry;
 const behaviorShouldRecordCheckInCloseOnTabRemoved =
   behavior.shouldRecordCheckInCloseOnTabRemoved;
@@ -24,12 +25,64 @@ const HISTORY_LIMIT = 200;
 
 // ---------- helpers ----------
 
+async function ensureDemoSettings() {
+  const stored = await chrome.storage.local.get(["blockedSites"]);
+  const current = Array.isArray(stored.blockedSites) ? stored.blockedSites : [];
+  const leftoverDemoSites = ["reddit.com", "tiktok.com", "youtu.be"];
+  if (
+    !current.length ||
+    leftoverDemoSites.some((site) => current.includes(site))
+  ) {
+    await chrome.storage.local.set({ blockedSites: EXT_DEFAULTS.blockedSites });
+  }
+}
+
+async function armOpenBlockedTabs() {
+  const settings = await getSettings();
+  if (!settings.skipEntryGate) return;
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({});
+  } catch {
+    return;
+  }
+  for (const tab of tabs) {
+    if (tab.id == null || !tab.url) continue;
+    let url;
+    try {
+      url = new URL(tab.url);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+    if (!behaviorIsInterruptUrl(tab.url, settings.blockedSites)) continue;
+    const pattern = behaviorFindBlockingPattern(
+      url.hostname,
+      settings.blockedSites,
+    );
+    if (!pattern) continue;
+    const sessions = await getTabSessions();
+    if (sessions[tab.id]) continue;
+    try {
+      await startTabSession(tab.id, {
+        pattern,
+        host: url.hostname,
+        intent: "",
+      });
+    } catch {
+      // Tab may not be injectable yet.
+    }
+  }
+}
+
 async function getSettings() {
   const stored = await chrome.storage.local.get([
     "blockedSites",
     "pauseSeconds",
     "allowGraceMinutes",
     "checkInMinutes",
+    "checkInSeconds",
+    "skipEntryGate",
   ]);
   return {
     blockedSites: Array.isArray(stored.blockedSites)
@@ -48,6 +101,14 @@ async function getSettings() {
       typeof stored.checkInMinutes === "number" && stored.checkInMinutes >= 1
         ? Math.min(240, stored.checkInMinutes)
         : EXT_DEFAULTS.checkInMinutes,
+    checkInSeconds:
+      typeof stored.checkInSeconds === "number" && stored.checkInSeconds >= 1
+        ? Math.min(3600, stored.checkInSeconds)
+        : EXT_DEFAULTS.checkInSeconds,
+    skipEntryGate:
+      typeof stored.skipEntryGate === "boolean"
+        ? stored.skipEntryGate
+        : EXT_DEFAULTS.skipEntryGate,
   };
 }
 
@@ -126,7 +187,7 @@ async function clearTabSession(tabId) {
 async function startTabSession(tabId, { pattern, host, intent }) {
   const settings = await getSettings();
   const now = Date.now();
-  const nextCheckInAt = now + settings.checkInMinutes * 60 * 1000;
+  const nextCheckInAt = now + settings.checkInSeconds * 1000;
   const sessions = await getTabSessions();
   sessions[tabId] = {
     tabId,
@@ -136,23 +197,38 @@ async function startTabSession(tabId, { pattern, host, intent }) {
     startedAt: now,
     nextCheckInAt,
     checkInCount: 0,
+    paperDismissed: false,
   };
   await setTabSessions(sessions);
-  await scheduleCheckIn(tabId, nextCheckInAt);
+  try {
+    await injectCheckInOverlay(tabId, sessions[tabId]);
+  } catch {
+    await scheduleCheckIn(tabId, nextCheckInAt);
+  }
 }
 
 function tabStillOnBlockedHost(tab, session, settings) {
-  return behaviorTabStillOnBlockedHost(
+  return behavior.tabStillOnInterruptUrl(
     tab.url,
     session.pattern,
     settings.blockedSites,
   );
 }
 
-async function injectCheckInOverlay(tabId, session) {
-  const settings = await getSettings();
-  const target = { tabId };
+function checkInPayload(session, settings, type) {
+  return {
+    type,
+    intent: session.intent,
+    host: session.host,
+    startedAt: session.startedAt,
+    checkInCount: session.checkInCount,
+    checkInMinutes: settings.checkInMinutes,
+    checkInSeconds: settings.checkInSeconds,
+  };
+}
 
+async function injectCheckInFiles(tabId) {
+  const target = { tabId };
   try {
     await chrome.scripting.insertCSS({
       target,
@@ -161,30 +237,53 @@ async function injectCheckInOverlay(tabId, session) {
   } catch {
     // CSS may already be present on repeat check-ins.
   }
-
   try {
     await chrome.scripting.executeScript({
       target,
       files: ["checkin/checkin.js"],
     });
-  } catch {
-    // Script may already be injected in SPA tabs.
+  } catch (err) {
+    // Already-injected is fine. A real inject failure must surface.
+    const message = String(err?.message || err);
+    if (!/already|duplicate|cannot register/i.test(message)) {
+      throw err;
+    }
   }
+}
 
-  await chrome.tabs.sendMessage(tabId, {
-    type: "SHOW_CHECKIN",
-    intent: session.intent,
-    host: session.host,
-    startedAt: session.startedAt,
-    checkInCount: session.checkInCount,
-    checkInMinutes: settings.checkInMinutes,
-  });
-  await bumpStat("checkInShown");
+async function markAwaitingCheckIn(tabId) {
   const sessions = await getTabSessions();
   const stored = sessions[tabId];
-  if (stored) {
-    stored.awaitingCheckIn = true;
-    await setTabSessions(sessions);
+  if (!stored) return;
+  stored.awaitingCheckIn = true;
+  await setTabSessions(sessions);
+}
+
+async function injectCheckInOverlay(tabId, session) {
+  const settings = await getSettings();
+  await injectCheckInFiles(tabId);
+  await chrome.tabs.sendMessage(
+    tabId,
+    checkInPayload(session, settings, "SHOW_CHECKIN"),
+  );
+  await playSting();
+  await bumpStat("checkInShown");
+  await markAwaitingCheckIn(tabId);
+}
+
+async function playSting() {
+  try {
+    const hasDoc = await chrome.offscreen.hasDocument();
+    if (!hasDoc) {
+      await chrome.offscreen.createDocument({
+        url: "offscreen/audio.html",
+        reasons: ["AUDIO_PLAYBACK"],
+        justification: "Play the brain-rot interrupt sting",
+      });
+    }
+    await chrome.runtime.sendMessage({ type: "OFFSCREEN_PLAY_STING" });
+  } catch {
+    // Audio is optional. The visual takeover still runs.
   }
 }
 
@@ -272,6 +371,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
   const settings = await getSettings();
+  if (settings.skipEntryGate) return;
+
   const interceptUrl = chrome.runtime.getURL("intercept/intercept.html");
 
   await allowanceStore.hydrate();
@@ -315,6 +416,52 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   })();
 });
 
+async function armFromUrl(tabId, urlString) {
+  const settings = await getSettings();
+  if (!settings.skipEntryGate) return;
+
+  let url;
+  try {
+    url = new URL(urlString || "");
+  } catch {
+    return;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
+
+  if (!behaviorIsInterruptUrl(urlString, settings.blockedSites)) {
+    const sessions = await getTabSessions();
+    if (sessions[tabId]) {
+      await clearTabSession(tabId);
+      try {
+        await chrome.tabs.sendMessage(tabId, { type: "HIDE_CHECKIN" });
+      } catch {}
+    }
+    return;
+  }
+
+  const pattern = behaviorFindBlockingPattern(url.hostname, settings.blockedSites);
+  if (!pattern) return;
+
+  const sessions = await getTabSessions();
+  const session = sessions[tabId];
+  if (!session) {
+    await startTabSession(tabId, {
+      pattern,
+      host: url.hostname,
+      intent: "",
+    });
+    return;
+  }
+
+  if (!session.paperDismissed && !session.awaitingCheckIn) {
+    try {
+      await injectCheckInOverlay(tabId, session);
+    } catch {
+      // Page may still be swapping documents.
+    }
+  }
+}
+
 // Clear check-in session when the tab leaves a blocked host
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (!changeInfo.url && changeInfo.status !== "complete") return;
@@ -322,17 +469,27 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   const interceptUrl = chrome.runtime.getURL("intercept/intercept.html");
   if ((tab.url || "").startsWith(interceptUrl)) return;
 
+  const settings = await getSettings();
   const sessions = await getTabSessions();
   const session = sessions[tabId];
-  if (!session) return;
 
-  const settings = await getSettings();
-  if (!tabStillOnBlockedHost(tab, session, settings)) {
+  if (session && !tabStillOnBlockedHost(tab, session, settings)) {
     await clearTabSession(tabId);
     try {
       await chrome.tabs.sendMessage(tabId, { type: "HIDE_CHECKIN" });
     } catch {}
+    return;
   }
+
+  if (changeInfo.url || changeInfo.status === "complete") {
+    await armFromUrl(tabId, tab.url || "");
+  }
+});
+
+// YouTube Shorts is a same-tab history change, not a full load.
+chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+  if (details.frameId !== 0 || details.tabId < 0) return;
+  armFromUrl(details.tabId, details.url).catch(() => {});
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -346,6 +503,19 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 const messageHandlers = {
   GET_SETTINGS: async () => getSettings(),
+
+  PLAY_STING: async () => {
+    await playSting();
+    return { ok: true };
+  },
+
+  ARM_CURRENT: async (_msg, sender) => {
+    const tabId = sender.tab?.id;
+    const url = sender.tab?.url || "";
+    if (tabId == null) return { ok: false, error: "no tab" };
+    await armFromUrl(tabId, url);
+    return { ok: true };
+  },
 
   CONTINUE: async (msg, sender) => {
     const tabId = sender.tab?.id;
@@ -391,13 +561,13 @@ const messageHandlers = {
     const sessions = await getTabSessions();
     const session = sessions[tabId];
     if (!session) return { ok: false, error: "no session" };
-    const settings = await getSettings();
     const now = Date.now();
-      session.nextCheckInAt = now + settings.checkInMinutes * 60 * 1000;
+    session.nextCheckInAt = 0;
     session.checkInCount += 1;
     session.awaitingCheckIn = false;
+    session.paperDismissed = true;
     await setTabSessions(sessions);
-    await scheduleCheckIn(tabId, session.nextCheckInAt);
+    await chrome.alarms.clear(checkInAlarmName(tabId));
     await bumpStat("checkInExtended");
     await recordHistory({
       action: "checkin_extend",
@@ -410,6 +580,14 @@ const messageHandlers = {
     try {
       await chrome.tabs.sendMessage(tabId, { type: "HIDE_CHECKIN" });
     } catch {}
+    return { ok: true };
+  },
+
+  CHECKIN_SHOWN: async (_msg, sender) => {
+    const tabId = sender.tab?.id;
+    await playSting();
+    await bumpStat("checkInShown");
+    if (tabId) await markAwaitingCheckIn(tabId);
     return { ok: true };
   },
 
@@ -454,7 +632,45 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // Toolbar icon opens Insights; intercept page links open Insights or Settings.
-chrome.action.onClicked.addListener(() => {
+chrome.action.onClicked.addListener(async (tab) => {
+  const settings = await getSettings();
+  let url;
+  try {
+    url = new URL(tab?.url || "");
+  } catch {
+    url = null;
+  }
+  const onInterrupt = url
+    ? behaviorIsInterruptUrl(tab.url, settings.blockedSites)
+    : false;
+  const pattern = url
+    ? behaviorFindBlockingPattern(url.hostname, settings.blockedSites)
+    : null;
+
+  if (onInterrupt && pattern && tab?.id >= 0) {
+    let sessions = await getTabSessions();
+    let session = sessions[tab.id];
+    if (!session) {
+      try {
+        await startTabSession(tab.id, {
+          pattern,
+          host: url.hostname,
+          intent: "",
+        });
+        return;
+      } catch {
+        // Fall through to Insights if the page rejected injection.
+      }
+    } else {
+      try {
+        await injectCheckInOverlay(tab.id, session);
+        return;
+      } catch {
+        // Fall through to Insights if the page rejected injection.
+      }
+    }
+  }
+
   chrome.tabs.create({
     url: chrome.runtime.getURL("options/insights.html"),
   });
@@ -467,6 +683,8 @@ chrome.runtime.onInstalled.addListener(async () => {
     "pauseSeconds",
     "allowGraceMinutes",
     "checkInMinutes",
+    "checkInSeconds",
+    "skipEntryGate",
   ]);
   const patch = {};
   if (!Array.isArray(stored.blockedSites))
@@ -477,5 +695,17 @@ chrome.runtime.onInstalled.addListener(async () => {
     patch.allowGraceMinutes = EXT_DEFAULTS.allowGraceMinutes;
   if (typeof stored.checkInMinutes !== "number")
     patch.checkInMinutes = EXT_DEFAULTS.checkInMinutes;
+  if (
+    typeof stored.checkInSeconds !== "number" ||
+    stored.checkInSeconds === 20
+  )
+    patch.checkInSeconds = EXT_DEFAULTS.checkInSeconds;
+  if (typeof stored.skipEntryGate !== "boolean")
+    patch.skipEntryGate = EXT_DEFAULTS.skipEntryGate;
   if (Object.keys(patch).length) await chrome.storage.local.set(patch);
+  await armOpenBlockedTabs();
 });
+
+ensureDemoSettings()
+  .then(armOpenBlockedTabs)
+  .catch(() => {});

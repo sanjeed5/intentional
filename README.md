@@ -1,5 +1,33 @@
 # Intentional
 
+**This branch (`demo/brain-rot-interrupt`) is a recording demo.** It is not
+for the Chrome Web Store. `main` stays the real product.
+
+On Instagram, YouTube Shorts, X, or Twitter, the Batmaz et al.
+*Psychological Reports* paper covers the page as soon as you arrive.
+Sound is record-scratch then vine boom from Myinstants, stored locally
+under `sounds/` and not committed. Demo only. Do not ship.
+
+## Record the clip
+
+1. Open `brave://extensions` (or `chrome://extensions`).
+2. Developer mode on. **Load unpacked** → `~/projects/intentional`.
+   If Intentional is already loaded, click **Reload**, then **Reset to
+   defaults** on the Settings page so Instagram, Shorts, and X are in
+   the site list.
+3. Pin the toolbar icon.
+4. Open `https://x.com`. Refresh the tab after reloading the extension.
+   Do not start the screen recording yet if you still need to log in.
+5. Start recording, then open Instagram, YouTube Shorts, or X. The paper
+   should cover the page on arrival. Click the toolbar icon if you want
+   to cue it by hand.
+6. Unmute the tab / system audio so the sting is in the clip.
+
+Toolbar icon on a blocked tab = show the paper now. On any other tab it
+still opens Insights.
+
+---
+
 A small browser extension that makes distracting sites **opt-in instead of
 autopilot**. It targets two problems:
 
@@ -57,9 +85,9 @@ the blocked sites and timing on the settings page.
 3. Click **Load unpacked**.
 4. Pick the folder `~/projects/intentional`.
 
-The extension is now installed. Pin it from the puzzle-piece menu — clicking
-the toolbar icon opens **Insights** (stats and patterns). **Settings** is one
-click away via the nav, or from the pause screen.
+The extension is now installed. Pin it from the puzzle-piece menu. On this
+demo branch, the toolbar icon shows the paper on a blocked tab, or opens
+**Insights** otherwise. **Settings** is one click away via the nav.
 
 ## Test it
 
@@ -99,12 +127,13 @@ To open pages:
   same tab. Default: ask again after you continue (re-prompt on the next
   navigation). You can also stay unblocked until you close the tab, or choose
   a fixed window (1–240 minutes). Subdomains count as the same site.
-- **Check-in interval (minutes)** — delay after continuing before the in-page
-  check-in overlay, and the same interval between each check-in if you stay.
-  Default `10`.
-- **Blocked sites** — one hostname per line. Subdomains match automatically:
-  `twitter.com` also catches `mobile.twitter.com`. `x.com` and `twitter.com`
-  are separate entries.
+- **Paper interrupt (seconds)** — fallback only if the page was not ready
+  yet. The paper normally appears on arrival. Default `1` on this branch.
+- **Skip the entry gate** — default on. Open blocked sites normally; only
+  the paper interrupt runs.
+- **Blocked sites** — one hostname per line. Defaults: `x.com`,
+  `twitter.com`, `instagram.com`, `youtube.com`, `m.youtube.com`. YouTube
+  only triggers on `/shorts`.
 
 ## Local stats
 

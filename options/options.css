@@ -172,6 +172,19 @@ body {
   font-size: 11px;
 }
 
+.field-check .label-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.field-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .field-row {
   display: flex;
   align-items: center;

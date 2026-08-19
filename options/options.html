@@ -14,7 +14,7 @@
             <span class="brand-dot" aria-hidden="true"></span>
             Intentional
           </h1>
-          <p class="lede">A small pause before distracting sites.</p>
+          <p class="lede">Brain-rot demo: the paper takeover after you scroll.</p>
           <nav class="page-nav" aria-label="Extension pages">
             <a href="options.html" class="page-nav-link" aria-current="page"
               >Settings</a
@@ -68,19 +68,30 @@
         </label>
 
         <label class="field">
-          <span class="label">Check-in interval (minutes)</span>
+          <span class="label">Paper interrupt (seconds)</span>
           <input
-            id="check-in-minutes"
+            id="check-in-seconds"
             type="number"
             min="1"
-            max="240"
+            max="3600"
             step="1"
             inputmode="numeric"
           />
           <span class="hint">
-            After you continue past the entry gate, how long before a gentle
-            in-page check-in appears — and the same interval between each
-            check-in if you stay. Default 10. Whole minutes only.
+            Fallback only, if the page was not ready yet. The paper normally
+            appears as soon as you open Instagram, YouTube Shorts, or X.
+            Toolbar icon on those tabs shows it now.
+          </span>
+        </label>
+
+        <label class="field field-check">
+          <span class="label-row">
+            <input id="skip-entry-gate" type="checkbox" />
+            <span class="label">Skip the entry gate</span>
+          </span>
+          <span class="hint">
+            On by default. Open Instagram, YouTube Shorts, or X and the paper
+            covers the page. Turn off to keep the original pause screen.
           </span>
         </label>
 
@@ -89,12 +100,13 @@
           <textarea
             id="blocked-sites"
             rows="6"
-            placeholder="x.com&#10;twitter.com&#10;youtube.com"
+            placeholder="x.com&#10;twitter.com&#10;instagram.com&#10;youtube.com"
           ></textarea>
           <span class="hint">
             One hostname per line. Subdomains are matched automatically
             (e.g. <code>twitter.com</code> also catches
-            <code>mobile.twitter.com</code>).
+            <code>mobile.twitter.com</code>). YouTube only triggers on
+            Shorts (<code>/shorts</code>), not regular videos.
           </span>
         </label>
 
